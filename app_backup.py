@@ -4,14 +4,7 @@ from datetime import datetime
 
 from core.schemas import Transaction
 from core.orchestrator import Orchestrator
-from agents import (
-    PatternAgent,
-    RiskAgent,
-    HistoryAgent,
-    CriticAgent,
-    VerifierAgent,
-    AnalystAgent
-)
+from agents import PatternAgent, RiskAgent, HistoryAgent
 
 # ============================================================
 # CONFIG
@@ -953,11 +946,9 @@ elif page == "Transaction Lab":
                     <span style="color:#00d9ff;font-size:10px;">
                         {num}
                     </span>
-
                     <span style="color:#dcecf1;font-size:11px;font-weight:600;">
                         &nbsp; {name} AGENT
                     </span>
-
                     <span style="float:right;color:#42e8a7;font-size:9px;">
                         READY
                     </span>
@@ -966,26 +957,13 @@ elif page == "Transaction Lab":
                 unsafe_allow_html=True
             )
 
-    # ========================================================
-    # START ANALYSIS ONLY WHEN BUTTON IS CLICKED
-    # ========================================================
+        if analyze:
 
-    if analyze:
+            if not transaction_id or not merchant or not location or not device_id:
 
-        # ----------------------------------------------------
-        # INPUT VALIDATION
-        # ----------------------------------------------------
-
-        if (
-            not transaction_id
-            or not merchant
-            or not location
-            or not device_id
-        ):
-
-            st.warning(
-                "Complete all transaction fields before initiating analysis."
-            )
+                st.warning(
+                    "Complete all transaction fields before initiating analysis."
+                )
 
         else:
 
@@ -994,7 +972,7 @@ elif page == "Transaction Lab":
             )
 
             # ========================================================
-            # CREATE TRANSACTION
+            # REAL BACKEND ANALYSIS
             # ========================================================
 
             transaction = Transaction(
@@ -1002,42 +980,24 @@ elif page == "Transaction Lab":
                 amount=amount,
                 location=location,
                 device=device_id,
-                timestamp=datetime.now().strftime(
-                    "%Y-%m-%d %H:%M"
-                )
+                timestamp=datetime.now().strftime("%Y-%m-%d %H:%M")
             )
-
-            # ========================================================
-            # BACKEND AGENTS
-            # ========================================================
 
             backend_agents = [
                 PatternAgent(),
                 RiskAgent(),
-                HistoryAgent(),
-                CriticAgent(),
-                VerifierAgent(),
-                AnalystAgent()
+                HistoryAgent()
             ]
 
-            # ========================================================
-            # RUN ORCHESTRATOR
-            # ========================================================
-
-            with st.spinner(
-                "Running multi-agent verification pipeline..."
-            ):
+            with st.spinner("Running multi-agent verification pipeline..."):
 
                 orchestrator = Orchestrator()
 
-                (
-                    final_result,
-                    agent_results,
-                    verification,
-                    evidence_records
-                ) = orchestrator.run(
-                    transaction,
-                    backend_agents
+                final_result, agent_results, verification = (
+                    orchestrator.run(
+                        transaction,
+                        backend_agents
+                    )
                 )
 
             # ========================================================
@@ -1050,28 +1010,14 @@ elif page == "Transaction Lab":
                 "HIGH": 100
             }
 
-            primary_results = [
-                result
-                for result in agent_results
-                if result.agent_name in [
-                    "Pattern Agent",
-                    "Risk Agent",
-                    "History Agent"
-                ]
-            ]
-
-            risk_score = (
-                round(
-                    sum(
-                        risk_values.get(
-                            result.risk_level.upper(),
-                            50
-                        )
-                        for result in primary_results
-                    ) / len(primary_results)
-                )
-                if primary_results
-                else 50
+            risk_score = round(
+                sum(
+                    risk_values.get(
+                        result.risk_level.upper(),
+                        50
+                    )
+                    for result in agent_results
+                ) / len(agent_results)
             )
 
             # ========================================================
@@ -1087,45 +1033,14 @@ elif page == "Transaction Lab":
                 st.markdown(
                     f"""
                     <div class="investigation">
-
-                        <div class="mini-label">
-                            TRANSACTION
-                        </div>
-
-                        <div class="txn-id">
-                            {transaction_id}
-                        </div>
-
+                        <div class="mini-label">TRANSACTION</div>
+                        <div class="txn-id">{transaction_id}</div>
                         <br>
-
-                        <div class="mini-label">
-                            MERCHANT
-                        </div>
-
-                        <div style="color:#dcecf1;">
-                            {merchant}
-                        </div>
-
+                        <div class="mini-label">MERCHANT</div>
+                        <div style="color:#dcecf1;">{merchant}</div>
                         <br>
-
-                        <div class="mini-label">
-                            VALUE
-                        </div>
-
-                        <div class="txn-amount">
-                            ₹{amount:,.2f}
-                        </div>
-
-                        <br>
-
-                        <div class="mini-label">
-                            CHANNEL
-                        </div>
-
-                        <div class="txn-meta">
-                            {transaction_type}
-                        </div>
-
+                        <div class="mini-label">VALUE</div>
+                        <div class="txn-amount">₹{amount:,.2f}</div>
                     </div>
                     """,
                     unsafe_allow_html=True
@@ -1136,27 +1051,14 @@ elif page == "Transaction Lab":
                 st.markdown(
                     f"""
                     <div class="risk-panel">
-
-                        <div class="mini-label">
-                            AGENT RISK INDEX
-                        </div>
-
+                        <div class="mini-label">AGENT RISK INDEX</div>
                         <div style="margin-top:15px;">
-
-                            <span class="risk-number">
-                                {risk_score}
-                            </span>
-
-                            <span class="risk-small">
-                                / 100
-                            </span>
-
+                            <span class="risk-number">{risk_score}</span>
+                            <span class="risk-small"> / 100</span>
                         </div>
-
                         <div class="risk-high">
                             {final_result.decision}
                         </div>
-
                     </div>
                     """,
                     unsafe_allow_html=True
@@ -1173,28 +1075,14 @@ elif page == "Transaction Lab":
                 st.markdown(
                     f"""
                     <div class="evidence-card">
-
-                        <span style="color:#00e5ff;">
-                            ◉
+                        <span style="color:#00e5ff;">◉</span>
+                        <span style="color:#dcecf1;font-weight:600;">
+                            &nbsp; {result.agent_name.upper()}
                         </span>
-
-                        <span style="
-                            color:#dcecf1;
-                            font-weight:600;
-                        ">
-                            &nbsp;
-                            {result.agent_name.upper()}
-                        </span>
-
-                        <span style="
-                            float:right;
-                            color:#42e8a7;
-                        ">
-                            ✓ {result.risk_level}
-                            |
+                        <span style="float:right;color:#42e8a7;">
+                            ✓ {result.risk_level} |
                             {result.confidence:.0%}
                         </span>
-
                     </div>
                     """,
                     unsafe_allow_html=True
@@ -1211,71 +1099,13 @@ elif page == "Transaction Lab":
                     )
 
             # ========================================================
-            # STRUCTURED EVIDENCE
-            # ========================================================
-
-            st.markdown("### Evidence & Reasoning")
-
-            st.caption(
-                "Structured evidence generated from the multi-agent pipeline."
-            )
-
-            if evidence_records:
-
-                for record in evidence_records[:12]:
-
-                    st.markdown(
-                        f"""
-                        <div class="evidence-card">
-
-                            <div class="evidence-number">
-                                {record["evidence_id"]}
-                            </div>
-
-                            <div class="evidence-title">
-                                {record["rule"].replace("_", " ")}
-                            </div>
-
-                            <div class="evidence-text">
-                                {record["observation"]}
-                            </div>
-
-                            <div style="
-                                margin-top:7px;
-                                color:#405966;
-                                font-size:9px;
-                            ">
-                                SOURCE:
-                                {record["source"]}
-                                &nbsp; | &nbsp;
-                                AGENT:
-                                {record["agent"]}
-                                &nbsp; | &nbsp;
-                                CONFIDENCE:
-                                {record["confidence"]:.0%}
-                            </div>
-
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
-
-            else:
-
-                st.info(
-                    "No structured evidence records were generated."
-                )
-
-            # ========================================================
             # VERIFICATION
             # ========================================================
 
             st.markdown("### Independent Verification")
 
-            verification_status = verification.status.upper()
-
             st.info(
-                f"Status: {verification_status}  |  "
+                f"Status: {verification.status}  |  "
                 f"Confidence: {verification.confidence:.0%}"
             )
 
@@ -1292,19 +1122,13 @@ elif page == "Transaction Lab":
             st.markdown(
                 f"""
                 <div class="decision">
-
-                    <div class="decision-icon">
-                        ⚠
-                    </div>
-
+                    <div class="decision-icon">⚠</div>
                     <div class="decision-title">
                         {final_result.decision}
                     </div>
-
                     <div class="decision-sub">
                         {final_result.reason}
                     </div>
-
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -1316,8 +1140,7 @@ elif page == "Transaction Lab":
             )
 
             st.write(
-                f"Revisions performed: "
-                f"{final_result.revision}"
+                f"Revisions performed: {final_result.revision}"
             )
 
 

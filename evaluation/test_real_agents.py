@@ -11,14 +11,22 @@ from agents import (
 )
 
 
+# ==========================================
+# HIGH-RISK TEST TRANSACTION
+# ==========================================
+
 transaction = Transaction(
-    transaction_id="TX003",
+    transaction_id="TX004",
     amount=50000,
-    location="Known Location",
-    device="Known Device",
-    timestamp="2026-09-25 14:00"
+    location="Unknown Location",
+    device="New Device",
+    timestamp="2026-09-25 02:00"
 )
 
+
+# ==========================================
+# ALL AGENTS
+# ==========================================
 
 agents = [
     PatternAgent(),
@@ -30,14 +38,22 @@ agents = [
 ]
 
 
+# ==========================================
+# START ORCHESTRATOR
+# ==========================================
+
 orchestrator = Orchestrator()
 
 
-final_result, agent_results, verification = orchestrator.run(
+final_result, agent_results, verification, evidence_records = orchestrator.run(
     transaction,
     agents
 )
 
+
+# ==========================================
+# FINAL RESULT
+# ==========================================
 
 print("\n========== FINAL RESULT ==========")
 
@@ -57,6 +73,10 @@ print(
 )
 
 
+# ==========================================
+# VERIFICATION RESULT
+# ==========================================
+
 print("\n========== VERIFICATION ==========")
 
 print(
@@ -69,12 +89,31 @@ print(
     verification.reason
 )
 
+print(
+    "Confidence:",
+    verification.confidence
+)
+
+print(
+    "Revision:",
+    verification.revision
+)
+
+
+# ==========================================
+# AGENT RESULTS
+# ==========================================
 
 print("\n========== AGENT RESULTS ==========")
 
 for result in agent_results:
 
-    print("\nAgent:", result.agent_name)
+    print("\n-----------------------------------")
+
+    print(
+        "Agent:",
+        result.agent_name
+    )
 
     print(
         "Risk:",
@@ -87,11 +126,26 @@ for result in agent_results:
     )
 
     print(
-        "Evidence:",
-        result.evidence
+        "Evidence:"
     )
+
+    for evidence in result.evidence:
+        print(
+            " -",
+            evidence
+        )
 
     print(
         "Confidence:",
         result.confidence
     )
+
+    print(
+        "Revision:",
+        result.revision
+    )
+
+
+print("\n===================================")
+print("HIGH-RISK TEST COMPLETED")
+print("===================================")

@@ -1,6 +1,7 @@
 from agents.base_agent import BaseAgent
 from core.schemas import Transaction, AgentResult
 from agents.gemini_client import ask_gemini
+from database.database import get_transaction_history
 import json
 
 
@@ -15,7 +16,7 @@ class PatternAgent(BaseAgent):
         feedback: str = None
     ) -> AgentResult:
 
-        correction_feedback = feedback or "No previous verification feedback."
+        correction_feedback = feedback or "No previous verifier feedback."
 
         prompt = f"""
 You are a financial fraud pattern analysis agent.
@@ -32,10 +33,6 @@ Transaction:
 Previous verifier feedback:
 {correction_feedback}
 
-If this is a re-analysis, specifically reconsider the issue mentioned
-in the verifier feedback and check whether your previous conclusion
-was properly supported by the transaction evidence.
-
 Return ONLY valid JSON in exactly this format:
 
 {{
@@ -51,7 +48,6 @@ Rules:
 - Evidence must contain concrete observations from the transaction.
 - Do not invent transaction information.
 - Do not automatically call an unusual transaction fraud.
-- If there is not enough evidence, use LOW or MEDIUM with appropriate confidence.
 """
 
         try:
@@ -75,16 +71,57 @@ Rules:
                 confidence=float(data["confidence"])
             )
 
-        except RuntimeError as e:
-
-            # ------------------------------------------------
-            # RULE-BASED FALLBACK
-            # ------------------------------------------------
-            # Gemini may be temporarily unavailable or
-            # rate-limited. The agent still performs analysis.
+        except RuntimeError:
 
             evidence = []
             risk_score = 0.0
+
+            # --------------------------------------------------
+            # 1. Historical amount anomaly
+            # --------------------------------------------------
+
+            history = get_transaction_history(
+                transaction.transaction_id
+            )
+
+            if history:
+
+                average_amount = sum(history) / len(history)
+
+                if average_amount > 0:
+
+                    ratio = transaction.amount / average_amount
+
+                    if ratio >= 10:
+
+                        evidence.append(
+                            f"Transaction amount is {ratio:.1f}x "
+                            "the historical transaction baseline."
+                        )
+
+                        risk_score += 0.6
+
+                    elif ratio >= 3:
+
+                        evidence.append(
+                            f"Transaction amount is {ratio:.1f}x "
+                            "the historical transaction baseline."
+                        )
+
+                        risk_score += 0.4
+
+                    elif ratio >= 2:
+
+                        evidence.append(
+                            f"Transaction amount is {ratio:.1f}x "
+                            "the historical transaction baseline."
+                        )
+
+                        risk_score += 0.2
+
+            # --------------------------------------------------
+            # 2. Device anomaly
+            # --------------------------------------------------
 
             if "new" in transaction.device.lower():
 
@@ -92,7 +129,11 @@ Rules:
                     "Transaction was initiated from a new device."
                 )
 
-                risk_score += 0.4
+                risk_score += 0.2
+
+            # --------------------------------------------------
+            # 3. Location anomaly
+            # --------------------------------------------------
 
             if "unknown" in transaction.location.lower():
 
@@ -100,7 +141,11 @@ Rules:
                     "Transaction originated from an unknown location."
                 )
 
-                risk_score += 0.3
+                risk_score += 0.2
+
+            # --------------------------------------------------
+            # 4. Time anomaly
+            # --------------------------------------------------
 
             try:
 
@@ -114,7 +159,7 @@ Rules:
                         f"Transaction occurred during unusual hours: {hour}:00."
                     )
 
-                    risk_score += 0.3
+                    risk_score += 0.2
 
             except (IndexError, ValueError):
 
@@ -123,6 +168,10 @@ Rules:
                 )
 
                 risk_score += 0.1
+
+            # --------------------------------------------------
+            # 5. Risk classification
+            # --------------------------------------------------
 
             if risk_score >= 0.7:
 
@@ -136,6 +185,31 @@ Rules:
 
                 risk_level = "LOW"
 
+            # --------------------------------------------------
+            # 6. Reason
+            # --------------------------------------------------
+
+            if risk_level == "HIGH":
+
+                reason = (
+                    "Multiple suspicious transaction patterns "
+                    "were detected."
+                )
+
+            elif risk_level == "MEDIUM":
+
+                reason = (
+                    "One or more suspicious transaction patterns "
+                    "were detected."
+                )
+
+            else:
+
+                reason = (
+                    "No major suspicious transaction patterns "
+                    "were detected."
+                )
+
             if not evidence:
 
                 evidence.append(
@@ -143,17 +217,14 @@ Rules:
                 )
 
             confidence = min(
-                0.85,
-                0.55 + risk_score * 0.30
+                0.90,
+                0.55 + risk_score * 0.35
             )
 
             return AgentResult(
                 agent_name=self.name,
                 risk_level=risk_level,
-                reason=(
-                    "Rule-based fallback analysis completed because "
-                    "the Gemini API is temporarily unavailable."
-                ),
+                reason=reason,
                 evidence=evidence,
                 confidence=round(confidence, 2)
             )

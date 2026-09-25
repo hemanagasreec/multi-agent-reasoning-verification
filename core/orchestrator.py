@@ -2,6 +2,7 @@ from core.schemas import Transaction, FinalDecision
 from core.verifier import Verifier
 from core.decision_engine import DecisionEngine
 from core.correction import CorrectionEngine
+from core.evidence import build_evidence
 
 from database.database import (
     create_tables,
@@ -40,15 +41,9 @@ class Orchestrator:
             "\n[ORCHESTRATOR] Starting fraud analysis..."
         )
 
-        # ---------------------------------------------------------
-        # STEP 0: SAVE TRANSACTION
-        # ---------------------------------------------------------
-
-        save_transaction(transaction)
-
-        # ---------------------------------------------------------
-        # SEPARATE AGENT ROLES
-        # ---------------------------------------------------------
+        # ==========================================
+        # IDENTIFY AGENT ROLES
+        # ==========================================
 
         primary_agents = [
             agent
@@ -87,9 +82,9 @@ class Orchestrator:
             None
         )
 
-        # ---------------------------------------------------------
-        # STEP 1: PRIMARY AGENTS
-        # ---------------------------------------------------------
+        # ==========================================
+        # PRIMARY ANALYSIS
+        # ==========================================
 
         print(
             "\n[ORCHESTRATOR] "
@@ -122,9 +117,9 @@ class Orchestrator:
                 f"({result.confidence:.0%})"
             )
 
-        # ---------------------------------------------------------
-        # STEP 2: CORE VERIFICATION
-        # ---------------------------------------------------------
+        # ==========================================
+        # CORE VERIFICATION
+        # ==========================================
 
         verification = self.verifier.verify(
             agent_results
@@ -149,9 +144,9 @@ class Orchestrator:
             f"{verification.reason}"
         )
 
-        # ---------------------------------------------------------
-        # STEP 3: CRITIC
-        # ---------------------------------------------------------
+        # ==========================================
+        # CRITIC AGENT
+        # ==========================================
 
         critic_result = None
 
@@ -188,9 +183,9 @@ class Orchestrator:
                 f"{critic_result.reason}"
             )
 
-        # ---------------------------------------------------------
-        # STEP 4: INDEPENDENT VERIFIER
-        # ---------------------------------------------------------
+        # ==========================================
+        # INDEPENDENT VERIFIER AGENT
+        # ==========================================
 
         independent_result = None
 
@@ -227,9 +222,9 @@ class Orchestrator:
                 f"{independent_result.reason}"
             )
 
-        # ---------------------------------------------------------
-        # STEP 5: ANALYST
-        # ---------------------------------------------------------
+        # ==========================================
+        # FINAL ANALYST
+        # ==========================================
 
         analyst_result = None
 
@@ -267,9 +262,9 @@ class Orchestrator:
                 f"{analyst_result.reason}"
             )
 
-        # ---------------------------------------------------------
-        # STEP 6: SELF-CORRECTION LOOP
-        # ---------------------------------------------------------
+        # ==========================================
+        # SELF-CORRECTION LOOP
+        # ==========================================
 
         revision = 0
 
@@ -284,8 +279,6 @@ class Orchestrator:
                 f"\n[ORCHESTRATOR] "
                 f"Revision {revision} triggered."
             )
-
-            # Re-run primary agents with feedback
 
             corrected_results = (
                 self.correction_engine.correct(
@@ -308,7 +301,9 @@ class Orchestrator:
                     result
                 )
 
-            # Re-verify corrected results
+            # ==========================================
+            # RE-VERIFICATION
+            # ==========================================
 
             verification = self.verifier.verify(
                 agent_results
@@ -327,7 +322,9 @@ class Orchestrator:
                 f"{verification.status}"
             )
 
-            # Re-run Critic
+            # ==========================================
+            # RE-RUN CRITIC
+            # ==========================================
 
             if critic_agent:
 
@@ -350,7 +347,9 @@ class Orchestrator:
                     critic_result
                 )
 
-            # Re-run Independent Verifier
+            # ==========================================
+            # RE-RUN INDEPENDENT VERIFIER
+            # ==========================================
 
             if independent_verifier:
 
@@ -373,7 +372,9 @@ class Orchestrator:
                     independent_result
                 )
 
-            # Re-run Analyst
+            # ==========================================
+            # RE-RUN ANALYST
+            # ==========================================
 
             if analyst_agent:
 
@@ -397,9 +398,9 @@ class Orchestrator:
                     analyst_result
                 )
 
-        # ---------------------------------------------------------
-        # STEP 7: FINAL DECISION
-        # ---------------------------------------------------------
+        # ==========================================
+        # FINAL DECISION
+        # ==========================================
 
         print(
             "\n[ORCHESTRATOR] "
@@ -409,7 +410,9 @@ class Orchestrator:
         decision_data = self.decision_engine.decide(
             agent_results,
             verification,
-            analyst_result=analyst_result
+            analyst_result=analyst_result,
+            critic_result=critic_result,
+            independent_result=independent_result
         )
 
         final_result = FinalDecision(
@@ -425,9 +428,9 @@ class Orchestrator:
             f"{final_result.decision}"
         )
 
-        # ---------------------------------------------------------
-        # STEP 8: SAVE FINAL AUDIT RECORD
-        # ---------------------------------------------------------
+        # ==========================================
+        # SAVE FINAL TASK
+        # ==========================================
 
         save_task(
             transaction.transaction_id,
@@ -437,9 +440,20 @@ class Orchestrator:
             transaction.timestamp
         )
 
-        # ---------------------------------------------------------
-        # RETURN RESULTS
-        # ---------------------------------------------------------
+        # ==========================================
+        # SAVE CURRENT TRANSACTION LAST
+        #
+        # Important:
+        # The current transaction is saved only AFTER
+        # analysis so it cannot influence its own
+        # historical baseline.
+        # ==========================================
+
+        save_transaction(transaction)
+
+        # ==========================================
+        # DISPLAY RESULTS
+        # ==========================================
 
         display_results = list(agent_results)
 
@@ -452,8 +466,28 @@ class Orchestrator:
         if analyst_result:
             display_results.append(analyst_result)
 
-        return (
-            final_result,
-            display_results,
-            verification
+        # ==========================================
+        # BUILD STRUCTURED EVIDENCE
+        # ==========================================
+
+        evidence_records = build_evidence(
+            transaction,
+            display_results
         )
+
+        print(
+            f"\n[ORCHESTRATOR] "
+            f"Structured evidence records created: "
+            f"{len(evidence_records)}"
+        )
+
+        # ==========================================
+        # RETURN RESULTS
+        # ==========================================
+
+        return (
+          final_result,
+          display_results,
+          verification,
+          evidence_records
+       )

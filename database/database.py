@@ -13,9 +13,9 @@ def create_tables():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # --------------------------------------------------------
-    # TRANSACTIONS TABLE
-    # --------------------------------------------------------
+    # ==========================================
+    # TRANSACTIONS
+    # ==========================================
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS transactions (
@@ -23,13 +23,14 @@ def create_tables():
             amount REAL,
             location TEXT,
             device TEXT,
-            timestamp TEXT
+            timestamp TEXT,
+            transaction_type TEXT DEFAULT 'CURRENT'
         )
     """)
 
-    # --------------------------------------------------------
-    # TASKS TABLE
-    # --------------------------------------------------------
+    # ==========================================
+    # TASKS
+    # ==========================================
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS tasks (
@@ -41,9 +42,9 @@ def create_tables():
         )
     """)
 
-    # --------------------------------------------------------
-    # AGENT RUNS TABLE
-    # --------------------------------------------------------
+    # ==========================================
+    # AGENT RUNS / AUDIT LOG
+    # ==========================================
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS agent_runs (
@@ -58,9 +59,9 @@ def create_tables():
         )
     """)
 
-    # --------------------------------------------------------
-    # VERIFICATION RESULTS TABLE
-    # --------------------------------------------------------
+    # ==========================================
+    # VERIFICATION RESULTS
+    # ==========================================
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS verification_results (
@@ -77,34 +78,45 @@ def create_tables():
     conn.close()
 
 
-# ============================================================
+# ==========================================
 # SAVE TRANSACTION
-# ============================================================
+# ==========================================
 
-def save_transaction(transaction):
+def save_transaction(
+    transaction,
+    transaction_type="CURRENT"
+):
 
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
         INSERT OR REPLACE INTO transactions
-        (transaction_id, amount, location, device, timestamp)
-        VALUES (?, ?, ?, ?, ?)
+        (
+            transaction_id,
+            amount,
+            location,
+            device,
+            timestamp,
+            transaction_type
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
     """, (
         transaction.transaction_id,
         transaction.amount,
         transaction.location,
         transaction.device,
-        transaction.timestamp
+        transaction.timestamp,
+        transaction_type
     ))
 
     conn.commit()
     conn.close()
 
 
-# ============================================================
-# GET TRANSACTION HISTORY
-# ============================================================
+# ==========================================
+# GET HISTORICAL TRANSACTION AMOUNTS
+# ==========================================
 
 def get_transaction_history(transaction_id):
 
@@ -114,7 +126,8 @@ def get_transaction_history(transaction_id):
     cursor.execute("""
         SELECT amount
         FROM transactions
-        WHERE transaction_id != ?
+        WHERE transaction_type = 'HISTORICAL'
+        AND transaction_id != ?
         ORDER BY timestamp DESC
     """, (transaction_id,))
 
@@ -128,9 +141,9 @@ def get_transaction_history(transaction_id):
     ]
 
 
-# ============================================================
+# ==========================================
 # SAVE TASK
-# ============================================================
+# ==========================================
 
 def save_task(
     task_id,
@@ -145,7 +158,13 @@ def save_task(
 
     cursor.execute("""
         INSERT OR REPLACE INTO tasks
-        (task_id, transaction_id, final_decision, confidence, timestamp)
+        (
+            task_id,
+            transaction_id,
+            final_decision,
+            confidence,
+            timestamp
+        )
         VALUES (?, ?, ?, ?, ?)
     """, (
         task_id,
@@ -159,20 +178,33 @@ def save_task(
     conn.close()
 
 
-# ============================================================
+# ==========================================
 # SAVE AGENT RESULT
-# ============================================================
+# ==========================================
 
-def save_agent_result(task_id, result):
+def save_agent_result(
+    task_id,
+    result
+):
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    evidence_text = " | ".join(result.evidence)
+    evidence_text = " | ".join(
+        result.evidence
+    )
 
     cursor.execute("""
         INSERT INTO agent_runs
-        (task_id, agent_name, risk_level, reason, evidence, confidence, revision)
+        (
+            task_id,
+            agent_name,
+            risk_level,
+            reason,
+            evidence,
+            confidence,
+            revision
+        )
         VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (
         task_id,
@@ -188,18 +220,27 @@ def save_agent_result(task_id, result):
     conn.close()
 
 
-# ============================================================
+# ==========================================
 # SAVE VERIFICATION
-# ============================================================
+# ==========================================
 
-def save_verification(task_id, result):
+def save_verification(
+    task_id,
+    result
+):
 
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
         INSERT INTO verification_results
-        (task_id, status, reason, confidence, revision)
+        (
+            task_id,
+            status,
+            reason,
+            confidence,
+            revision
+        )
         VALUES (?, ?, ?, ?, ?)
     """, (
         task_id,

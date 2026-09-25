@@ -14,17 +14,9 @@ class HistoryAgent(BaseAgent):
         feedback: str = None
     ) -> AgentResult:
 
-        # --------------------------------------------------------
-        # GET PREVIOUS TRANSACTIONS FROM DATABASE
-        # --------------------------------------------------------
-
         history = get_transaction_history(
             transaction.transaction_id
         )
-
-        # --------------------------------------------------------
-        # NO HISTORY AVAILABLE
-        # --------------------------------------------------------
 
         if not history:
 
@@ -36,22 +28,15 @@ class HistoryAgent(BaseAgent):
                     "for comparison."
                 ),
                 evidence=[
-                    "No historical transactions found in the database."
+                    "No historical transactions found "
+                    "in the database."
                 ],
                 confidence=0.50
             )
 
-        # --------------------------------------------------------
-        # CALCULATE HISTORICAL AVERAGE
-        # --------------------------------------------------------
-
         average_amount = sum(history) / len(history)
 
         current_amount = transaction.amount
-
-        # --------------------------------------------------------
-        # COMPARE CURRENT TRANSACTION WITH HISTORY
-        # --------------------------------------------------------
 
         evidence = []
 
@@ -62,80 +47,82 @@ class HistoryAgent(BaseAgent):
         )
 
         evidence.append(
-            f"Historical average amount: ₹{average_amount:,.2f}."
+            f"Historical transaction baseline average: "
+            f"₹{average_amount:,.2f}."
         )
 
         evidence.append(
-            f"Current transaction amount: ₹{current_amount:,.2f}."
+            f"Current transaction amount: "
+            f"₹{current_amount:,.2f}."
         )
 
-        # --------------------------------------------------------
-        # RISK CLASSIFICATION
-        # --------------------------------------------------------
-
+        # Extremely large deviation
         if ratio >= 10:
 
             risk_level = "HIGH"
 
             reason = (
-                "Current transaction amount is extremely higher "
-                "than the user's historical average."
+                "The current transaction amount is extremely "
+                "higher than the historical transaction baseline."
             )
 
             confidence = 0.90
 
             evidence.append(
-                f"Current amount is {ratio:.1f}x the historical average."
+                f"Current amount is {ratio:.1f}x the "
+                "historical transaction baseline."
             )
 
+        # Significant deviation
         elif ratio >= 3:
 
             risk_level = "MEDIUM"
 
             reason = (
-                "Current transaction amount is significantly higher "
-                "than the user's historical average."
+                "The current transaction amount is significantly "
+                "higher than the historical transaction baseline."
             )
 
             confidence = 0.75
 
             evidence.append(
-                f"Current amount is {ratio:.1f}x the historical average."
+                f"Current amount is {ratio:.1f}x the "
+                "historical transaction baseline."
             )
 
+        # Noticeable deviation
         elif ratio >= 2:
 
             risk_level = "MEDIUM"
 
             reason = (
-                "Current transaction amount is noticeably higher "
-                "than the user's historical average."
+                "The current transaction amount is noticeably "
+                "higher than the historical transaction baseline."
             )
 
             confidence = 0.65
 
             evidence.append(
-                f"Current amount is {ratio:.1f}x the historical average."
+                f"Current amount is {ratio:.1f}x the "
+                "historical transaction baseline."
             )
 
+        # Normal range
         else:
 
             risk_level = "LOW"
 
             reason = (
-                "Current transaction amount is reasonably "
-                "consistent with historical spending."
+                "The current transaction amount is reasonably "
+                "consistent with the historical transaction baseline."
             )
 
             confidence = 0.80
 
             evidence.append(
-                f"Current amount is {ratio:.1f}x the historical average."
+                f"Current amount is {ratio:.1f}x the "
+                "historical transaction baseline."
             )
-
-        # --------------------------------------------------------
-        # FEEDBACK INFORMATION
-        # --------------------------------------------------------
 
         if feedback:
 
@@ -143,10 +130,6 @@ class HistoryAgent(BaseAgent):
                 "Previous verifier feedback was considered "
                 "during re-analysis."
             )
-
-        # --------------------------------------------------------
-        # RETURN RESULT
-        # --------------------------------------------------------
 
         return AgentResult(
             agent_name=self.name,

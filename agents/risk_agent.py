@@ -1,5 +1,6 @@
 from agents.base_agent import BaseAgent
 from core.schemas import Transaction, AgentResult
+from database.database import get_transaction_history
 
 
 class RiskAgent(BaseAgent):
@@ -8,59 +9,163 @@ class RiskAgent(BaseAgent):
         super().__init__("Risk Agent")
 
     def analyze(
-    self,
-    transaction: Transaction,
-    feedback: str = None
-) -> AgentResult:
+        self,
+        transaction: Transaction,
+        feedback: str = None
+    ) -> AgentResult:
 
         evidence = []
         risk_score = 0.0
 
-        # New device check
+        # --------------------------------------------------
+        # 1. Historical amount anomaly
+        # --------------------------------------------------
+
+        history = get_transaction_history(
+            transaction.transaction_id
+        )
+
+        if history:
+
+            average_amount = sum(history) / len(history)
+
+            if average_amount > 0:
+
+                ratio = transaction.amount / average_amount
+
+                if ratio >= 10:
+
+                    evidence.append(
+                        f"Transaction amount is {ratio:.1f}x "
+                        "the historical transaction baseline."
+                    )
+
+                    risk_score += 0.6
+
+                elif ratio >= 3:
+
+                    evidence.append(
+                        f"Transaction amount is {ratio:.1f}x "
+                        "the historical transaction baseline."
+                    )
+
+                    risk_score += 0.4
+
+                elif ratio >= 2:
+
+                    evidence.append(
+                        f"Transaction amount is {ratio:.1f}x "
+                        "the historical transaction baseline."
+                    )
+
+                    risk_score += 0.2
+
+        # --------------------------------------------------
+        # 2. New device
+        # --------------------------------------------------
+
         if "new" in transaction.device.lower():
-            evidence.append("Transaction was initiated from a new device.")
-            risk_score += 0.4
 
-        # Unknown location check
+            evidence.append(
+                "Transaction was initiated from a new device."
+            )
+
+            risk_score += 0.2
+
+        # --------------------------------------------------
+        # 3. Unknown location
+        # --------------------------------------------------
+
         if "unknown" in transaction.location.lower():
-            evidence.append("Transaction originated from an unknown location.")
-            risk_score += 0.3
 
-        # Unusual transaction time
+            evidence.append(
+                "Transaction originated from an unknown location."
+            )
+
+            risk_score += 0.2
+
+        # --------------------------------------------------
+        # 4. Unusual transaction time
+        # --------------------------------------------------
+
         try:
-            hour = int(transaction.timestamp.split()[1].split(":")[0])
+
+            hour = int(
+                transaction.timestamp.split()[1].split(":")[0]
+            )
 
             if 1 <= hour <= 4:
+
                 evidence.append(
                     f"Transaction occurred during unusual hours: {hour}:00."
                 )
-                risk_score += 0.3
+
+                risk_score += 0.2
 
         except (IndexError, ValueError):
-            evidence.append("Transaction timestamp could not be fully analyzed.")
+
+            evidence.append(
+                "Transaction timestamp could not be fully analyzed."
+            )
+
             risk_score += 0.1
 
-        # Risk level
+        # --------------------------------------------------
+        # 5. Risk classification
+        # --------------------------------------------------
+
         if risk_score >= 0.7:
+
             risk_level = "HIGH"
+
         elif risk_score >= 0.3:
+
             risk_level = "MEDIUM"
+
         else:
+
             risk_level = "LOW"
 
-        if not evidence:
-            evidence.append("No major environmental risk indicators detected.")
+        # --------------------------------------------------
+        # 6. Reason
+        # --------------------------------------------------
 
-        confidence = min(0.95, 0.60 + risk_score * 0.35)
+        if risk_level == "HIGH":
+
+            reason = (
+                "Multiple independent risk indicators "
+                "were detected."
+            )
+
+        elif risk_level == "MEDIUM":
+
+            reason = (
+                "One or more transaction risk indicators "
+                "were detected."
+            )
+
+        else:
+
+            reason = (
+                "No major transaction risk indicators "
+                "were detected."
+            )
+
+        if not evidence:
+
+            evidence.append(
+                "No major transaction risk indicators detected."
+            )
+
+        confidence = min(
+            0.90,
+            0.60 + risk_score * 0.30
+        )
 
         return AgentResult(
             agent_name=self.name,
             risk_level=risk_level,
-            reason=(
-                "Environmental risk indicators detected."
-                if risk_level != "LOW"
-                else "Low environmental risk detected."
-            ),
+            reason=reason,
             evidence=evidence,
             confidence=round(confidence, 2)
         )

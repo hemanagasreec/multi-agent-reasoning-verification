@@ -1,4 +1,4 @@
-from core.schemas import AgentResult, VerificationResult
+from core.schemas import VerificationResult
 
 
 class Verifier:
@@ -15,10 +15,6 @@ class Verifier:
                 confidence=0.0
             )
 
-        # --------------------------------------------------------
-        # COLLECT RISK LEVELS
-        # --------------------------------------------------------
-
         risk_levels = [
             result.risk_level.upper()
             for result in agent_results
@@ -28,89 +24,161 @@ class Verifier:
         medium_count = risk_levels.count("MEDIUM")
         low_count = risk_levels.count("LOW")
 
-        # --------------------------------------------------------
-        # ALL AGENTS AGREE
-        # --------------------------------------------------------
+        # --------------------------------------------------
+        # 1. Check whether agents have common evidence
+        # --------------------------------------------------
 
-        if high_count == len(agent_results):
+        evidence_map = {}
 
-            return VerificationResult(
-                status="VERIFIED",
-                reason=(
-                    "All agents independently identified "
-                    "the transaction as high risk."
-                ),
-                confidence=0.90
-            )
+        for result in agent_results:
+
+            for evidence in result.evidence:
+
+                normalized = evidence.lower()
+
+                # Historical amount anomaly
+                if (
+                    "historical transaction baseline" in normalized
+                    or "historical average" in normalized
+                    or "x the historical" in normalized
+                ):
+
+                    evidence_map.setdefault(
+                        "amount_anomaly",
+                        []
+                    ).append(result.agent_name)
+
+                # New device
+                if "new device" in normalized:
+
+                    evidence_map.setdefault(
+                        "new_device",
+                        []
+                    ).append(result.agent_name)
+
+                # Unknown location
+                if "unknown location" in normalized:
+
+                    evidence_map.setdefault(
+                        "unknown_location",
+                        []
+                    ).append(result.agent_name)
+
+                # Unusual transaction time
+                if "unusual hours" in normalized:
+
+                    evidence_map.setdefault(
+                        "unusual_time",
+                        []
+                    ).append(result.agent_name)
+
+        common_evidence = []
+
+        for evidence_type, agents in evidence_map.items():
+
+            unique_agents = list(dict.fromkeys(agents))
+
+            if len(unique_agents) >= 2:
+
+                common_evidence.append(
+                    f"{evidence_type} identified by "
+                    f"{', '.join(unique_agents)}."
+                )
+
+        # --------------------------------------------------
+        # 2. Strong agreement on underlying evidence
+        # --------------------------------------------------
+
+        if common_evidence:
+
+            # Different risk levels do not automatically mean
+            # contradiction when agents identify the same evidence.
+
+            if high_count >= 1 and medium_count >= 1:
+
+                return VerificationResult(
+                    status="VERIFIED",
+                    reason=(
+                        "Agents assigned different risk levels, "
+                        "but independently identified consistent "
+                        "underlying evidence. "
+                        + " ".join(common_evidence)
+                    ),
+                    confidence=0.85
+                )
+
+            if high_count >= 2:
+
+                return VerificationResult(
+                    status="VERIFIED",
+                    reason=(
+                        "Multiple agents independently identified "
+                        "consistent high-risk evidence. "
+                        + " ".join(common_evidence)
+                    ),
+                    confidence=0.90
+                )
+
+            if medium_count >= 2:
+
+                return VerificationResult(
+                    status="VERIFIED",
+                    reason=(
+                        "Multiple agents independently identified "
+                        "consistent moderate-risk evidence. "
+                        + " ".join(common_evidence)
+                    ),
+                    confidence=0.85
+                )
+
+        # --------------------------------------------------
+        # 3. All agents agree on LOW
+        # --------------------------------------------------
 
         if low_count == len(agent_results):
 
             return VerificationResult(
                 status="VERIFIED",
                 reason=(
-                    "All agents independently identified "
-                    "the transaction as low risk."
+                    "All primary agents independently reported "
+                    "low risk with no conflicting evidence."
                 ),
                 confidence=0.90
             )
 
-        # --------------------------------------------------------
-        # CONTRADICTION DETECTION
-        # --------------------------------------------------------
+        # --------------------------------------------------
+        # 4. Genuine HIGH vs LOW contradiction
+        # --------------------------------------------------
 
         if high_count > 0 and low_count > 0:
 
             high_agents = [
-                result
+                result.agent_name
                 for result in agent_results
                 if result.risk_level.upper() == "HIGH"
             ]
 
             low_agents = [
-                result
+                result.agent_name
                 for result in agent_results
                 if result.risk_level.upper() == "LOW"
             ]
 
-            high_names = ", ".join(
-                result.agent_name
-                for result in high_agents
-            )
-
-            low_names = ", ".join(
-                result.agent_name
-                for result in low_agents
-            )
-
-            high_evidence = []
-
-            for result in high_agents:
-                high_evidence.extend(result.evidence)
-
-            low_evidence = []
-
-            for result in low_agents:
-                low_evidence.extend(result.evidence)
-
-            reason = (
-                f"Contradiction detected between agents. "
-                f"{high_names} classified the transaction as HIGH risk, "
-                f"while {low_names} classified it as LOW risk. "
-                f"High-risk evidence: {high_evidence}. "
-                f"Low-risk evidence: {low_evidence}. "
-                f"Re-analysis is required to determine whether "
-                f"the high-risk evidence is sufficient."
-            )
-
             return VerificationResult(
                 status="UNCERTAIN",
-                reason=reason,
+                reason=(
+                    "Contradictory risk conclusions detected. "
+                    f"HIGH-risk agents: {', '.join(high_agents)}. "
+                    f"LOW-risk agents: {', '.join(low_agents)}. "
+                    "The evidence must be re-analyzed before "
+                    "accepting the conclusion."
+                ),
                 confidence=0.50
             )
 
-        # --------------------------------------------------------
-        # MIXED MEDIUM / OTHER RESULTS
-        # --------------------------------------------------------
+        # --------------------------------------------------
+        # 5. Other mixed or uncertain cases
+        # --------------------------------------------------
 
         agent_summary = []
 
@@ -122,14 +190,12 @@ class Verifier:
                 f"({result.confidence:.0%})"
             )
 
-        reason = (
-            "Agents produced mixed risk assessments. "
-            + " | ".join(agent_summary)
-            + ". Additional analysis is required."
-        )
-
         return VerificationResult(
             status="REVIEW",
-            reason=reason,
+            reason=(
+                "Agents produced mixed risk assessments. "
+                + " | ".join(agent_summary)
+                + ". Additional analysis is required."
+            ),
             confidence=0.65
         )

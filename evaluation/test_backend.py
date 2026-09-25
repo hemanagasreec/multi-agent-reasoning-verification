@@ -35,7 +35,7 @@ agents = [
 
 orchestrator = Orchestrator()
 
-final_result, agent_results, verification = orchestrator.run(
+final_result, agent_results, verification, evidence_records = orchestrator.run(
     transaction,
     agents
 )
