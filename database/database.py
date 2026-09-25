@@ -1,6 +1,5 @@
 import sqlite3
 
-
 DB_NAME = "database/fraud_detection.db"
 
 
@@ -29,7 +28,9 @@ def create_tables():
             agent_name TEXT,
             risk_level TEXT,
             reason TEXT,
-            confidence REAL
+            evidence TEXT,
+            confidence REAL,
+            revision INTEGER
         )
     """)
 
@@ -39,7 +40,8 @@ def create_tables():
             task_id TEXT,
             status TEXT,
             reason TEXT,
-            confidence REAL
+            confidence REAL,
+            revision INTEGER
         )
     """)
 
@@ -52,10 +54,16 @@ def save_task(task_id, transaction_id, decision, confidence, timestamp):
     cursor = conn.cursor()
 
     cursor.execute("""
-        INSERT INTO tasks
+        INSERT OR REPLACE INTO tasks
         (task_id, transaction_id, final_decision, confidence, timestamp)
         VALUES (?, ?, ?, ?, ?)
-    """, (task_id, transaction_id, decision, confidence, timestamp))
+    """, (
+        task_id,
+        transaction_id,
+        decision,
+        confidence,
+        timestamp
+    ))
 
     conn.commit()
     conn.close()
@@ -65,16 +73,20 @@ def save_agent_result(task_id, result):
     conn = get_connection()
     cursor = conn.cursor()
 
+    evidence_text = " | ".join(result.evidence)
+
     cursor.execute("""
         INSERT INTO agent_runs
-        (task_id, agent_name, risk_level, reason, confidence)
-        VALUES (?, ?, ?, ?, ?)
+        (task_id, agent_name, risk_level, reason, evidence, confidence, revision)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (
         task_id,
         result.agent_name,
         result.risk_level,
         result.reason,
-        result.confidence
+        evidence_text,
+        result.confidence,
+        result.revision
     ))
 
     conn.commit()
@@ -87,13 +99,14 @@ def save_verification(task_id, result):
 
     cursor.execute("""
         INSERT INTO verification_results
-        (task_id, status, reason, confidence)
-        VALUES (?, ?, ?, ?)
+        (task_id, status, reason, confidence, revision)
+        VALUES (?, ?, ?, ?, ?)
     """, (
         task_id,
         result.status,
         result.reason,
-        result.confidence
+        result.confidence,
+        result.revision
     ))
 
     conn.commit()

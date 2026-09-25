@@ -1,8 +1,7 @@
-import json
-
 from agents.base_agent import BaseAgent
-from agents.gemini_client import ask_gemini
 from core.schemas import Transaction, AgentResult
+from agents.gemini_client import ask_gemini
+import json
 
 
 class PatternAgent(BaseAgent):
@@ -13,9 +12,9 @@ class PatternAgent(BaseAgent):
     def analyze(self, transaction: Transaction) -> AgentResult:
 
         prompt = f"""
-You are a financial fraud pattern detection agent.
+You are a financial fraud pattern analysis agent.
 
-Analyze the following transaction for suspicious patterns.
+Analyze this transaction ONLY for suspicious transaction patterns.
 
 Transaction:
 - ID: {transaction.transaction_id}
@@ -23,17 +22,6 @@ Transaction:
 - Location: {transaction.location}
 - Device: {transaction.device}
 - Timestamp: {transaction.timestamp}
-
-Look for indicators such as:
-- Unusually high transaction amount
-- Unusual location
-- New or unfamiliar device
-- Unusual transaction time
-- Combination of multiple suspicious indicators
-
-IMPORTANT:
-Do not automatically call an unusual transaction fraud.
-If evidence is insufficient, use MEDIUM or LOW risk.
 
 Return ONLY valid JSON in exactly this format:
 
@@ -44,30 +32,41 @@ Return ONLY valid JSON in exactly this format:
     "confidence": 0.80
 }}
 
-risk_level must be exactly one of:
-LOW, MEDIUM, HIGH
-
-confidence must be a number between 0 and 1.
+Rules:
+- risk_level must be exactly LOW, MEDIUM, or HIGH.
+- confidence must be between 0.0 and 1.0.
+- Evidence must contain concrete observations from the transaction.
+- Do not invent transaction information.
+- Do not automatically call an unusual transaction fraud.
+- If there is not enough evidence, use LOW or MEDIUM with appropriate confidence.
 """
 
         response = ask_gemini(prompt)
 
         try:
-            data = json.loads(response)
+            response = response.strip()
+
+            if response.startswith("```"):
+                response = response.replace("```json", "", 1)
+                response = response.replace("```", "", 1)
+                response = response.strip()
+
+            data = json.loads(response)	
 
             return AgentResult(
                 agent_name=self.name,
-                risk_level=data["risk_level"],
+                risk_level=data["risk_level"].upper(),
                 reason=data["reason"],
                 evidence=data["evidence"],
                 confidence=float(data["confidence"])
             )
 
-        except Exception as e:
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+
             return AgentResult(
                 agent_name=self.name,
                 risk_level="MEDIUM",
-                reason="Pattern analysis could not be reliably parsed.",
-                evidence=[f"Parser error: {str(e)}"],
-                confidence=0.40
+                reason="Pattern Agent could not reliably parse the AI response.",
+                evidence=["Invalid or unexpected Gemini response."],
+                confidence=0.30
             )
