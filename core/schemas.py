@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 
 
 class Transaction(BaseModel):
@@ -16,12 +16,14 @@ class AgentResult(BaseModel):
     reason: str
     evidence: List[str]
     confidence: float
+    revision: int = 0
 
 
 class VerificationResult(BaseModel):
     status: str
     reason: str
     confidence: float
+    revision: int = 0
 
 
 class FinalDecision(BaseModel):

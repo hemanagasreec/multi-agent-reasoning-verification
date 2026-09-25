@@ -2,7 +2,6 @@ from core.schemas import Transaction, FinalDecision
 from core.verifier import Verifier
 from core.decision_engine import DecisionEngine
 from core.correction import CorrectionEngine
-
 from database.database import (
     create_tables,
     save_task,
@@ -19,51 +18,67 @@ class Orchestrator:
         self.decision_engine = DecisionEngine()
         self.correction_engine = CorrectionEngine()
 
-        # Create database tables
         create_tables()
 
     def run(self, transaction: Transaction, agents):
 
         print("\n[ORCHESTRATOR] Starting fraud analysis...")
 
-        # Step 1: Run specialized agents
+        # -------------------------
+        # INITIAL AGENT ANALYSIS
+        # -------------------------
+
         agent_results = []
 
         for agent in agents:
+
             result = agent.analyze(transaction)
+
+            # Initial analysis = Revision 0
+            result.revision = 0
+
             agent_results.append(result)
 
-            # Save agent result to database
             save_agent_result(
                 transaction.transaction_id,
                 result
             )
 
             print(
-                f"[ORCHESTRATOR] {result.agent_name}: "
-                f"{result.risk_level} ({result.confidence})"
+                f"[ORCHESTRATOR] "
+                f"{result.agent_name}: "
+                f"{result.risk_level} "
+                f"({result.confidence})"
             )
 
-        # Step 2: Verify results
+        # -------------------------
+        # INITIAL VERIFICATION
+        # -------------------------
+
         verification = self.verifier.verify(agent_results)
 
-        # Save verification result
+        # Initial verification = Revision 0
+        verification.revision = 0
+
         save_verification(
             transaction.transaction_id,
             verification
         )
 
         print(
-            f"[ORCHESTRATOR] Verification: "
-            f"{verification.status}"
+            f"[ORCHESTRATOR] "
+            f"Verification: {verification.status}"
         )
 
         print(
-            f"[ORCHESTRATOR] Verification reason: "
-            f"{verification.reason}"
+            f"[ORCHESTRATOR] "
+            f"Verification reason: {verification.reason}"
         )
 
-        # Step 3: Self-correction loop
+        # -------------------------
+        # SELF-CORRECTION LOOP
+        # -------------------------
+
         revision = 0
 
         while (
@@ -74,35 +89,57 @@ class Orchestrator:
             revision += 1
 
             print(
-                f"\n[ORCHESTRATOR] Revision {revision} triggered."
+                f"\n[ORCHESTRATOR] "
+                f"Revision {revision} triggered."
             )
 
+            # Re-run all agents
             agent_results = self.correction_engine.correct(
                 transaction,
+                agents,
+                verification
+            )
+
+            # Store revision number for every agent result
+            for result in agent_results:
+
+                result.revision = revision
+
+                save_agent_result(
+                    transaction.transaction_id,
+                    result
+                )
+
+            # Re-verify the new results
+            verification = self.verifier.verify(
                 agent_results
             )
 
-            # Verify again after correction
-            verification = self.verifier.verify(agent_results)
+            # Store revision number for verification
+            verification.revision = revision
 
-            # Save re-verification result
             save_verification(
                 transaction.transaction_id,
                 verification
             )
 
             print(
-                f"[ORCHESTRATOR] Re-verification: "
+                f"[ORCHESTRATOR] "
+                f"Re-verification: "
                 f"{verification.status}"
             )
 
-        # Step 4: Decision Engine
+        # -------------------------
+        # FINAL DECISION
+        # -------------------------
+
+        print("\n[DECISION ENGINE] Making final decision...")
+
         decision_data = self.decision_engine.decide(
             agent_results,
             verification
         )
 
-        # Step 5: Create final result
         final_result = FinalDecision(
             decision=decision_data["decision"],
             reason=decision_data["reason"],
@@ -111,11 +148,15 @@ class Orchestrator:
         )
 
         print(
-            f"[ORCHESTRATOR] Final Decision: "
+            f"[ORCHESTRATOR] "
+            f"Final Decision: "
             f"{final_result.decision}"
         )
 
-        # Step 6: Save final decision to database
+        # -------------------------
+        # SAVE FINAL TASK
+        # -------------------------
+
         save_task(
             transaction.transaction_id,
             transaction.transaction_id,
@@ -124,4 +165,8 @@ class Orchestrator:
             transaction.timestamp
         )
 
-        return final_result, agent_results, verification
+        return (
+            final_result,
+            agent_results,
+            verification
+        )
