@@ -7,7 +7,11 @@ class RiskAgent(BaseAgent):
     def __init__(self):
         super().__init__("Risk Agent")
 
-    def analyze(self, transaction: Transaction) -> AgentResult:
+    def analyze(
+    self,
+    transaction: Transaction,
+    feedback: str = None
+) -> AgentResult:
 
         evidence = []
         risk_score = 0.0

@@ -4,6 +4,14 @@ class DecisionEngine:
 
         print("\n[DECISION ENGINE] Making final decision...")
 
+        # No results means there is not enough evidence.
+        if not agent_results:
+            return {
+                "decision": "INSUFFICIENT EVIDENCE / REVIEW",
+                "reason": "No agent results are available.",
+                "confidence": 0.0
+            }
+
         high_risk_count = sum(
             1
             for result in agent_results
@@ -22,7 +30,10 @@ class DecisionEngine:
             if result.risk_level.upper() == "LOW"
         )
 
-        # Do not make a strong decision when verification fails
+        # --------------------------------------------------------
+        # VERIFICATION MUST BE RESPECTED
+        # --------------------------------------------------------
+
         if verification.status == "UNCERTAIN":
             return {
                 "decision": "INSUFFICIENT EVIDENCE / REVIEW",
@@ -30,7 +41,24 @@ class DecisionEngine:
                 "confidence": verification.confidence
             }
 
-        # Multiple agents identify high risk
+        if verification.status == "REVIEW":
+            return {
+                "decision": "REVIEW",
+                "reason": verification.reason,
+                "confidence": verification.confidence
+            }
+
+        if verification.status == "FAILED":
+            return {
+                "decision": "INSUFFICIENT EVIDENCE / REVIEW",
+                "reason": verification.reason,
+                "confidence": verification.confidence
+            }
+
+        # --------------------------------------------------------
+        # VERIFIED RESULTS
+        # --------------------------------------------------------
+
         if high_risk_count >= 2:
             return {
                 "decision": "FRAUD / HIGH RISK",
@@ -38,7 +66,6 @@ class DecisionEngine:
                 "confidence": 0.90
             }
 
-        # One high-risk or multiple medium-risk results
         if high_risk_count == 1 or medium_risk_count >= 2:
             return {
                 "decision": "REVIEW",
@@ -46,7 +73,6 @@ class DecisionEngine:
                 "confidence": 0.70
             }
 
-        # Mostly low-risk results
         if low_risk_count >= 2:
             return {
                 "decision": "LEGITIMATE",

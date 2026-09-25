@@ -957,19 +957,72 @@ elif page == "Transaction Lab":
                 unsafe_allow_html=True
             )
 
-    if analyze:
+        if analyze:
 
-        if not transaction_id or not merchant or not location or not device_id:
+            if not transaction_id or not merchant or not location or not device_id:
 
-            st.warning(
-                "Complete all transaction fields before initiating analysis."
-            )
+                st.warning(
+                    "Complete all transaction fields before initiating analysis."
+                )
 
         else:
 
             st.success(
                 "Transaction accepted. Analysis pipeline initiated."
             )
+
+            # ========================================================
+            # REAL BACKEND ANALYSIS
+            # ========================================================
+
+            transaction = Transaction(
+                transaction_id=transaction_id,
+                amount=amount,
+                location=location,
+                device=device_id,
+                timestamp=datetime.now().strftime("%Y-%m-%d %H:%M")
+            )
+
+            backend_agents = [
+                PatternAgent(),
+                RiskAgent(),
+                HistoryAgent()
+            ]
+
+            with st.spinner("Running multi-agent verification pipeline..."):
+
+                orchestrator = Orchestrator()
+
+                final_result, agent_results, verification = (
+                    orchestrator.run(
+                        transaction,
+                        backend_agents
+                    )
+                )
+
+            # ========================================================
+            # DERIVED AGENT RISK INDEX
+            # ========================================================
+
+            risk_values = {
+                "LOW": 20,
+                "MEDIUM": 60,
+                "HIGH": 100
+            }
+
+            risk_score = round(
+                sum(
+                    risk_values.get(
+                        result.risk_level.upper(),
+                        50
+                    )
+                    for result in agent_results
+                ) / len(agent_results)
+            )
+
+            # ========================================================
+            # ANALYSIS RESULT
+            # ========================================================
 
             st.markdown("### Analysis Result")
 
@@ -998,54 +1051,96 @@ elif page == "Transaction Lab":
                 st.markdown(
                     f"""
                     <div class="risk-panel">
-                        <div class="mini-label">AI RISK ASSESSMENT</div>
+                        <div class="mini-label">AGENT RISK INDEX</div>
                         <div style="margin-top:15px;">
                             <span class="risk-number">{risk_score}</span>
                             <span class="risk-small"> / 100</span>
                         </div>
-                        <div class="risk-high">HIGH RISK</div>
+                        <div class="risk-high">
+                            {final_result.decision}
+                        </div>
                     </div>
                     """,
                     unsafe_allow_html=True
                 )
 
+            # ========================================================
+            # AGENT PIPELINE
+            # ========================================================
+
             st.markdown("### Agent Pipeline")
 
-            for num, name, status in agents:
+            for result in agent_results:
 
                 st.markdown(
                     f"""
                     <div class="evidence-card">
                         <span style="color:#00e5ff;">◉</span>
                         <span style="color:#dcecf1;font-weight:600;">
-                            &nbsp; {name} AGENT
+                            &nbsp; {result.agent_name.upper()}
                         </span>
                         <span style="float:right;color:#42e8a7;">
-                            ✓ COMPLETE
+                            ✓ {result.risk_level} |
+                            {result.confidence:.0%}
                         </span>
                     </div>
                     """,
                     unsafe_allow_html=True
                 )
 
-            st.markdown("### Final Decision")
+                st.caption(
+                    f"Reason: {result.reason}"
+                )
 
-            st.markdown("""
-            <div class="decision">
-                <div class="decision-icon">⚠</div>
-                <div class="decision-title">
-                    HIGH RISK
-                </div>
-                <div class="decision-sub">
-                    Transaction requires additional verification.
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+                for evidence in result.evidence:
+
+                    st.markdown(
+                        f"• {evidence}"
+                    )
+
+            # ========================================================
+            # VERIFICATION
+            # ========================================================
+
+            st.markdown("### Independent Verification")
 
             st.info(
-                "DEMO MODE — risk score and agent responses are currently "
-                "mock values. They will be replaced with the actual "
-                "backend outputs during integration."
+                f"Status: {verification.status}  |  "
+                f"Confidence: {verification.confidence:.0%}"
+            )
+
+            st.write(
+                verification.reason
+            )
+
+            # ========================================================
+            # FINAL DECISION
+            # ========================================================
+
+            st.markdown("### Final Decision")
+
+            st.markdown(
+                f"""
+                <div class="decision">
+                    <div class="decision-icon">⚠</div>
+                    <div class="decision-title">
+                        {final_result.decision}
+                    </div>
+                    <div class="decision-sub">
+                        {final_result.reason}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            st.metric(
+                "Decision Confidence",
+                f"{final_result.confidence:.0%}"
+            )
+
+            st.write(
+                f"Revisions performed: {final_result.revision}"
             )
 
 

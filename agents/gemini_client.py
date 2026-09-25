@@ -15,12 +15,18 @@ URL = (
     "v1beta/models/gemini-2.5-flash:generateContent"
 )
 
-
 # Force Python HTTPS connections to use IPv4.
 _original_getaddrinfo = socket.getaddrinfo
 
 
-def ipv4_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+def ipv4_getaddrinfo(
+    host,
+    port,
+    family=0,
+    type=0,
+    proto=0,
+    flags=0
+):
     return _original_getaddrinfo(
         host,
         port,
@@ -58,6 +64,13 @@ def ask_gemini(prompt):
         json=data,
         timeout=30
     )
+
+    # Handle Gemini rate limiting gracefully.
+    if response.status_code == 429:
+        raise RuntimeError(
+            "Gemini API rate limit reached. "
+            "Please wait and try again."
+        )
 
     response.raise_for_status()
 
