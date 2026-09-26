@@ -1,0 +1,23 @@
+                 Transaction
+                      ↓
+              ┌───────────────┐
+              │  Orchestrator │
+              └───────┬───────┘
+                      ↓
+       ┌──────────────┼──────────────┐
+       ↓              ↓              ↓
+   Pattern          Risk          History
+    Agent           Agent           Agent
+       └──────────────┼──────────────┘
+                      ↓
+             Core Verification
+                      ↓
+                  Critic
+                      ↓
+          Independent Verifier
+                      ↓
+                  Analyst
+                      ↓
+              Decision Engine
+                      ↓
+          Final Decision + Evidence
