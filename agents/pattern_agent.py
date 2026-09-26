@@ -291,7 +291,4 @@ Rules:
                     "Invalid or unexpected Gemini response."
                 ],
                 confidence=0.30
-                reason="Pattern analysis could not be reliably parsed.",
-                evidence=[f"Parser error: {str(e)}"],
-                confidence=0.40
             )

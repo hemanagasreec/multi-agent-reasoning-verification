@@ -1,5 +1,4 @@
 from .base_agent import BaseAgent
-# agents/__init__.py
 from .pattern_agent import PatternAgent
 from .risk_agent import RiskAgent
 from .history_agent import HistoryAgent
@@ -16,6 +15,4 @@ __all__ = [
     "AnalystAgent",
     "VerifierAgent",
     "CriticAgent",
-]
-    "CriticAgent"
 ]
