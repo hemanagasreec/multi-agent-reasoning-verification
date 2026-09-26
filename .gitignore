@@ -222,3 +222,4 @@ multi-agent-reasoning-verification/
 venv/
 __pycache__/
 *.pyc
+database/*.db

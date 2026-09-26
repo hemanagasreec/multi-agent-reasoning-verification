@@ -1,5 +1,6 @@
 import sqlite3
 
+
 DB_NAME = "database/fraud_detection.db"
 
 
@@ -8,8 +9,28 @@ def get_connection():
 
 
 def create_tables():
+
     conn = get_connection()
     cursor = conn.cursor()
+
+    # ==========================================
+    # TRANSACTIONS
+    # ==========================================
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS transactions (
+            transaction_id TEXT PRIMARY KEY,
+            amount REAL,
+            location TEXT,
+            device TEXT,
+            timestamp TEXT,
+            transaction_type TEXT DEFAULT 'CURRENT'
+        )
+    """)
+
+    # ==========================================
+    # TASKS
+    # ==========================================
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS tasks (
@@ -20,6 +41,10 @@ def create_tables():
             timestamp TEXT
         )
     """)
+
+    # ==========================================
+    # AGENT RUNS / AUDIT LOG
+    # ==========================================
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS agent_runs (
@@ -33,6 +58,10 @@ def create_tables():
             revision INTEGER
         )
     """)
+
+    # ==========================================
+    # VERIFICATION RESULTS
+    # ==========================================
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS verification_results (
@@ -49,13 +78,93 @@ def create_tables():
     conn.close()
 
 
-def save_task(task_id, transaction_id, decision, confidence, timestamp):
+# ==========================================
+# SAVE TRANSACTION
+# ==========================================
+
+def save_transaction(
+    transaction,
+    transaction_type="CURRENT"
+):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT OR REPLACE INTO transactions
+        (
+            transaction_id,
+            amount,
+            location,
+            device,
+            timestamp,
+            transaction_type
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (
+        transaction.transaction_id,
+        transaction.amount,
+        transaction.location,
+        transaction.device,
+        transaction.timestamp,
+        transaction_type
+    ))
+
+    conn.commit()
+    conn.close()
+
+
+# ==========================================
+# GET HISTORICAL TRANSACTION AMOUNTS
+# ==========================================
+
+def get_transaction_history(transaction_id):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT amount
+        FROM transactions
+        WHERE transaction_type = 'HISTORICAL'
+        AND transaction_id != ?
+        ORDER BY timestamp DESC
+    """, (transaction_id,))
+
+    rows = cursor.fetchall()
+
+    conn.close()
+
+    return [
+        row[0]
+        for row in rows
+    ]
+
+
+# ==========================================
+# SAVE TASK
+# ==========================================
+
+def save_task(
+    task_id,
+    transaction_id,
+    decision,
+    confidence,
+    timestamp
+):
+
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
         INSERT OR REPLACE INTO tasks
-        (task_id, transaction_id, final_decision, confidence, timestamp)
+        (
+            task_id,
+            transaction_id,
+            final_decision,
+            confidence,
+            timestamp
+        )
         VALUES (?, ?, ?, ?, ?)
     """, (
         task_id,
@@ -69,15 +178,33 @@ def save_task(task_id, transaction_id, decision, confidence, timestamp):
     conn.close()
 
 
-def save_agent_result(task_id, result):
+# ==========================================
+# SAVE AGENT RESULT
+# ==========================================
+
+def save_agent_result(
+    task_id,
+    result
+):
+
     conn = get_connection()
     cursor = conn.cursor()
 
-    evidence_text = " | ".join(result.evidence)
+    evidence_text = " | ".join(
+        result.evidence
+    )
 
     cursor.execute("""
         INSERT INTO agent_runs
-        (task_id, agent_name, risk_level, reason, evidence, confidence, revision)
+        (
+            task_id,
+            agent_name,
+            risk_level,
+            reason,
+            evidence,
+            confidence,
+            revision
+        )
         VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (
         task_id,
@@ -93,13 +220,27 @@ def save_agent_result(task_id, result):
     conn.close()
 
 
-def save_verification(task_id, result):
+# ==========================================
+# SAVE VERIFICATION
+# ==========================================
+
+def save_verification(
+    task_id,
+    result
+):
+
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
         INSERT INTO verification_results
-        (task_id, status, reason, confidence, revision)
+        (
+            task_id,
+            status,
+            reason,
+            confidence,
+            revision
+        )
         VALUES (?, ?, ?, ?, ?)
     """, (
         task_id,
