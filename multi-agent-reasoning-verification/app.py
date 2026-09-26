@@ -834,27 +834,6 @@ if page == "Overview":
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Final decision
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    st.markdown("""
-    <div class="decision">
-
-        <div class="decision-icon">⚠</div>
-
-        <div class="decision-title">
-            TRANSACTION REQUIRES VERIFICATION
-        </div>
-
-        <div class="decision-sub">
-            Multi-agent assessment produced a high-risk classification.
-            Additional verification is recommended before approval.
-        </div>
-
-    </div>
-    """, unsafe_allow_html=True)
-
 
 # ============================================================
 # TRANSACTION LAB
